@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SendMailActiveAccount;
 use App\Jobs\SendMailVerifiOTP;
 use App\Models\OTP;
 use App\Models\User;
@@ -55,20 +56,74 @@ class AuthController extends Controller
     {
         try {
             return DB::transaction(function () use ($request) {
+                $user = User::where('id', $request->user_id)->first();
+                if (!$user) {
+                    return "Tài khoản không tồn tại !";
+                }
                 $check = OTP::where('user_id', $request->user_id)->first();
                 if ($check) {
                     if ($check->otp_code == $request->otp_code) {
                         if (now() > $check->expired) {
                             return "Mã OTP đã hết hạn !";
                         } else {
-                            $user = User::where('id', $request->user_id)->first();
-                            $token = $user->createToken("Token Authentication Laravel");
-                            return array_merge($user->toArray(), ['token' => $token->accessToken]);
+                            if ($user->is_active == 1) {
+                                $token = $user->createToken("Token Authentication Laravel");
+                                return array_merge($user->toArray(), ['token' => $token->accessToken]);
+                            } else {
+                                return "Tài khoản chưa được kích hoạt !";
+                            }
                         }
                     } else {
                         return "Mã OTP Không chính xác !";
                     }
                 }
+            });
+        } catch (\Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+
+    public function register(Request $request)
+    {
+        try {
+            return DB::transaction(function () use ($request) {
+                $checkUsername = User::where('username', $request->username)->first();
+                $checkEmail = User::where('email', $request->email)->first();
+                if ($checkUsername) {
+                    return "Tên đăng nhập đã tồn tại !";
+                }
+
+                if ($checkEmail) {
+                    return "Email đã tồn tại !";
+                }
+                $tokenActive = generateToken(64);
+                $data = $request->all();
+                $data['password'] = bcrypt($data['password']);
+                $data['activation_token'] = $tokenActive;
+                $user = User::create($data);
+                $url = url("/api/auth/active-account?token=" . $tokenActive);
+                SendMailActiveAccount::dispatch($user, $url);
+                return $user;
+            });
+        } catch (\Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+
+    public function activeAccount(Request $request)
+    {
+        try {
+            return DB::transaction(function () use ($request) {
+                $token = $request->token;
+                if (!$token) {
+                    return "Đã xảy ra lỗi !";
+                }
+                $user = User::where('activation_token', $token)->first();
+                if (!$user) {
+                    return "Token không tồn tại !";
+                }
+                $user->update(['is_active' => 1, 'activation_token' => null]);
+                return $user;
             });
         } catch (\Exception $e) {
             throw new Exception($e->getMessage());
