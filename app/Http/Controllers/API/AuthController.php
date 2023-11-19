@@ -116,14 +116,14 @@ class AuthController extends Controller
             return DB::transaction(function () use ($request) {
                 $token = $request->token;
                 if (!$token) {
-                    return "Đã xảy ra lỗi !";
+                    return "Kích hoạt thất bại !";
                 }
                 $user = User::where('activation_token', $token)->first();
                 if (!$user) {
-                    return "Token không tồn tại !";
+                    return "Kích hoạt thất bại !";
                 }
                 $user->update(['is_active' => 1, 'activation_token' => null]);
-                return $user;
+                return "Kích hoạt thành công !";
             });
         } catch (\Exception $e) {
             throw new Exception($e->getMessage());
