@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Passport\Token;
 
 class AuthController extends Controller
 {
@@ -124,6 +125,24 @@ class AuthController extends Controller
                 }
                 $user->update(['is_active' => 1, 'activation_token' => null]);
                 return "Kích hoạt thành công !";
+            });
+        } catch (\Exception $e) {
+            throw new Exception($e->getMessage());
+        }
+    }
+
+    public function logout(Request $request)
+    {
+        try {
+            return DB::transaction(function () use ($request) {
+                if (Auth::guard('api')->check()) {
+                    $user = Auth::guard('api')->user();
+                    // Revoke the user's access tokens
+                    $user->tokens->each(function (Token $token) {
+                        $token->revoke();
+                    });
+                    return "Đã đăng xuất thành công !";
+                }
             });
         } catch (\Exception $e) {
             throw new Exception($e->getMessage());
